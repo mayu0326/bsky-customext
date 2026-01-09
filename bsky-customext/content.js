@@ -1,30 +1,84 @@
-// セッション管理：有効なセッションを返す（なければ新規作成）
+// Blueskyセッションを再利用＋必要ならrefreshする
 async function getValidSession() {
-  const { handle, apppw, sessionData } = await chrome.storage.local.get(['handle', 'apppw', 'sessionData']);
-  
-  // 保存済みのセッションがあるか確認（簡易チェック）
-  if (sessionData && sessionData.accessJwt) {
-    return sessionData;
-  }
+  const { handle, apppw, sessionData } = await chrome.storage.local.get([
+    "handle",
+    "apppw",
+    "sessionData",
+  ]);
 
+  // 設定がまだならログインUIへ
   if (!handle || !apppw) {
-    alert('設定画面からログイン情報を入力してください');
+    alert("BlueskyのハンドルとApp Passwordを拡張機能の設定で入力してください。");
     return null;
   }
 
-  const res = await fetch('https://bsky.social/xrpc/com.atproto.server.createSession', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ identifier: handle, password: apppw })
-  });
+  // 既存セッションがあればまず使う
+  if (sessionData && sessionData.accessJwt && sessionData.refreshJwt) {
+    // ここでは一旦そのまま使う（本気でやるなら exp を見て期限チェック）
+    return sessionData;
+  }
 
-  if (res.ok) {
+  // セッションが無い or 不完全 → 新規ログイン
+  const newSession = await createNewSession(handle, apppw);
+  if (!newSession) {
+    alert("Blueskyへのログインに失敗しました。ハンドル名とApp Passwordを確認してください。");
+    return null;
+  }
+  await chrome.storage.local.set({ sessionData: newSession });
+  return newSession;
+}
+
+// 新しいセッションを作成
+async function createNewSession(handle, apppw) {
+  try {
+    const res = await fetch(
+      "https://bsky.social/xrpc/com.atproto.server.createSession",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: handle, password: apppw }),
+      }
+    );
+
+    if (!res.ok) {
+      console.error("createSession failed", await res.text());
+      return null;
+    }
+
+    const session = await res.json();
+    // session には accessJwt / refreshJwt / did などが入っている想定
+    return session;
+  } catch (e) {
+    console.error("createSession error", e);
+    return null;
+  }
+}
+
+// 401などで失敗したときに呼ぶ用（必要なら後で使う）
+async function refreshSessionIfNeeded(sessionData) {
+  try {
+    const res = await fetch(
+      "https://bsky.social/xrpc/com.atproto.server.refreshSession",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${sessionData.refreshJwt}`,
+        },
+      }
+    );
+
+    if (!res.ok) {
+      console.error("refreshSession failed", await res.text());
+      return null;
+    }
+
     const newSession = await res.json();
     await chrome.storage.local.set({ sessionData: newSession });
     return newSession;
+  } catch (e) {
+    console.error("refreshSession error", e);
+    return null;
   }
-  alert('ログインに失敗しました');
-  return null;
 }
 
 // 相手の状態（フォロー中か等）を取得する
