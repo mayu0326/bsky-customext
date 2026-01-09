@@ -303,109 +303,77 @@ async function showMenu(e, handle) {
 // すでにボタンを付けたハンドルを記録
 const seenHandles = new Set();
 
-// ユーザー名の要素にボタンを追加する
 function injectButtons() {
   const path = location.pathname;
-
-  // 通知ページでは何もしない
   if (path.startsWith('/notifications')) return;
 
   const main = document.querySelector('main, [role="main"]');
   if (!main) return;
 
-  // --- 投稿詳細ページ: /profile/xxx/post/yyy のとき ---
-if (path.startsWith('/profile/') && path.includes('/post/')) {
-  const threadItems = main.querySelectorAll('div[data-testid^="postThreadItem-"]:not(.bsky-quick-processed)');
-  if (!threadItems.length) return;
+  // --- 1. タイムライン・詳細画面の処理 (投稿ごとに1つだけ付ける) ---
+  // feedItem (タイムライン) または postThreadItem (詳細) を探す
+  const postContainers = main.querySelectorAll('div[data-testid^="feedItem-"]:not(.bsky-quick-processed), div[data-testid^="postThreadItem-"]:not(.bsky-quick-processed)');
+  
+  postContainers.forEach(container => {
+    container.classList.add('bsky-quick-processed');
 
-  threadItems.forEach(item => {
-    item.classList.add('bsky-quick-processed');
+    // 投稿者情報が含まれるエリアから、最初の「テキストがあるリンク」を探す
+    // (アイコン画像だけのリンクはスキップするため innerText を確認)
+    const allLinks = Array.from(container.querySelectorAll('a[href^="/profile/"]'));
+    const targetLink = allLinks.find(link => link.innerText.trim().length > 0);
 
-    // そのスレッドアイテム内の /profile/ リンクを全部取る
-    const allProfileLinks = Array.from(item.querySelectorAll('a[href^="/profile/"]'));
-    if (allProfileLinks.length === 0) return;
-
-    // 0番目はアイコンのリンクであることが多いので、1番目を優先して使う
-    let targetLink = allProfileLinks[1] || allProfileLinks[0];
-
-    // すでにボタンが付いていたらスキップ
-    if (targetLink.nextSibling && targetLink.nextSibling.classList &&
-        targetLink.nextSibling.classList.contains('quick-action-btn')) {
-      return;
+    if (targetLink) {
+      addBtn(targetLink);
     }
-
-    const href = targetLink.getAttribute('href');
-    if (!href) {
-      targetLink.classList.add('bsky-quick-added');
-      return;
-    }
-
-    const handle = href.replace('/profile/', '');
-
-    targetLink.classList.add('bsky-quick-added');
-
-    const btn = document.createElement('span');
-    btn.innerText = ' 🦋';
-    btn.className = 'quick-action-btn';
-    btn.style.cursor = 'pointer';
-    btn.style.color = '#0085ff';
-    btn.title = 'クイックアクション';
-
-    btn.onclick = (e) => showMenu(e, handle);
-
-    targetLink.parentNode.insertBefore(btn, targetLink.nextSibling);
   });
 
-  return;
+  // --- 2. DM（メッセージ）画面の処理 ---
+  if (path.startsWith("/messages")) {
+    const dmLinks = main.querySelectorAll('a[href^="/profile/"]:not(.bsky-quick-added)');
+    dmLinks.forEach(link => {
+      // DM画面の青いハンドル名リンクに反応させる
+      if (link.innerText.trim().startsWith('@')) {
+        addBtn(link);
+      } else {
+        // それ以外（アイコン等）は処理済みにして無視
+        link.classList.add('bsky-quick-added');
+      }
+    });
+  }
 }
 
+// ボタンを追加する補助関数
+function addBtn(link) {
+  // 二重付与防止
+  if (link.classList.contains('bsky-quick-added') || 
+      (link.nextSibling && link.nextSibling.classList && link.nextSibling.classList.contains('quick-action-btn'))) {
+    return;
+  }
 
-  // --- タイムライン（ホームなど） ---
-  const posts = main.querySelectorAll('div[data-testid^="feedItem-"]:not(.bsky-quick-processed)');
+  const href = link.getAttribute('href');
+  if (!href) return;
+  const handle = href.replace('/profile/', '');
 
-  posts.forEach(post => {
-    post.classList.add('bsky-quick-processed');
+  link.classList.add('bsky-quick-added');
+  
+  const btn = document.createElement('span');
+  btn.innerText = ' 🦋';
+  btn.className = 'quick-action-btn';
+  btn.style.cursor = 'pointer';
+  btn.style.color = '#0085ff';
+  btn.style.marginLeft = '4px';
+  btn.style.fontWeight = 'bold';
+  
+  btn.onclick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showMenu(e, handle);
+  };
 
-    // 「名前＋@handle」の行を探す（align-items: flex-end を含む行）
-    const nameRow = post.querySelector('div[style*="align-items: flex-end"]');
-    if (!nameRow) return;
-
-    // その行の中の /profile/ リンク（通常は表示名側）をターゲットにする
-    const link = nameRow.querySelector('a[href^="/profile/"]:not(.bsky-quick-added)');
-    if (!link) return;
-
-    const href = link.getAttribute('href');
-    if (!href) {
-      link.classList.add('bsky-quick-added');
-      return;
-    }
-
-    const handle = href.replace('/profile/', '');
-
-    // すでにすぐ後ろにボタンがあるなら付けない
-    if (link.nextSibling && link.nextSibling.classList &&
-        link.nextSibling.classList.contains('quick-action-btn')) {
-      return;
-    }
-
-    link.classList.add('bsky-quick-added');
-
-    const btn = document.createElement('span');
-    btn.innerText = ' 🦋';
-    btn.className = 'quick-action-btn';
-    btn.style.cursor = 'pointer';
-    btn.style.color = '#0085ff';
-    btn.title = 'クイックアクション';
-
-    btn.onclick = (e) => showMenu(e, handle);
-
-    link.parentNode.insertBefore(btn, link.nextSibling);
-  });
+  link.parentNode.insertBefore(btn, link.nextSibling);
 }
 
-
-// 画面の更新を監視（無限スクロール対応）
+// 監視設定
 const observer = new MutationObserver(injectButtons);
 observer.observe(document.body, { childList: true, subtree: true });
-
 injectButtons();
