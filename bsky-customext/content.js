@@ -320,7 +320,13 @@ function injectButtons() {
     // 投稿者情報が含まれるエリアから、最初の「テキストがあるリンク」を探す
     // (アイコン画像だけのリンクはスキップするため innerText を確認)
     const allLinks = Array.from(container.querySelectorAll('a[href^="/profile/"]'));
-    const targetLink = allLinks.find(link => link.innerText.trim().length > 0);
+    // 【修正ポイント】リポスト主のリンクを除外する
+    // aria-label に「リポスト」が含まれているリンク、またはSVG（リポストアイコン）を含むリンクをスキップ
+    const targetLink = allLinks.find(link => {
+      const isRepostLink = link.getAttribute('aria-label')?.includes('リポスト') || !!link.querySelector('svg');
+      const hasText = link.innerText.trim().length > 0;
+      return hasText && !isRepostLink;
+    });
 
     if (targetLink) {
       addBtn(targetLink);
