@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Bluesky Quick Actions",
+  "version": "1.1",
+  "permissions": ["storage"],
+  "host_permissions": ["https://bsky.social/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon_16x16.png",
+      "32": "icons/icon_32x32.png",
+      "48": "icons/icon_48x48.png",
+      "128": "icons/icon_128x128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon_16x16.png",
+    "32": "icons/icon_32x32.png",
+    "48": "icons/icon_48x48.png",
+    "128": "icons/icon_128x128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://bsky.app/*"],
+      "js": ["content.js"],
+      "css": ["style.css"]
+    }
+  ]
+}
